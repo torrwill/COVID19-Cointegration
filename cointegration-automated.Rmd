@@ -1,0 +1,493 @@
+---
+title: "Cointegration-Automated"
+author: "Will Torres"
+date: "6/3/2021"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r}
+
+# import libraries
+################################################################################
+
+library(urca)
+library(forecast)
+library(tidyverse)
+library(vars)
+library(lmtest)
+library(ggplot2)
+library("tseries")
+
+################################################################################
+```
+
+```{r}
+# Data
+################################################################################
+
+# import data from PATH
+# Rewrite to get from github folder in the future
+
+# retrieve data from the csv files from PATH
+covid_data <- list.files("C:/Users/torrw/Desktop/iCompBio/covid-cointegration-summer2021/will/county3RWM", pattern = ".csv", all.files = TRUE, full.names = TRUE)
+
+# get list element for covid_data
+csv_data <- lapply(covid_data, read.csv)
+csv_data[is.na(csv_data)] = 0
+
+# Set the name of each list element to its respective file name.
+# NOTE: full.names = FALSE to get only the file names, not the full path.
+names(csv_data) <- gsub(".csv","", list.files("C:/Users/torrw/Desktop/iCompBio/covid-cointegration-summer2021/will/county3RWM", pattern = ".csv", all.files = TRUE, full.names = FALSE), fixed = TRUE)
+names(csv_data) <- gsub(", ", "-", names(csv_data), fixed = TRUE)
+
+# NOTE: any of the files can be referred to by covid_data[["City-State-US"]]
+
+################################################################################
+```
+
+```{r}
+# Plot Functions
+################################################################################
+
+# function to create a main tag using the excel sheet name
+get_df_name <- function(dataframe, count) {
+  df.name <- names(dataframe[count])
+  return(df.name)
+}
+
+################################################################################
+
+# Time Series Functions
+################################################################################
+
+# dailyCases time series function
+DC_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+  
+  dailyCases_ts = ts(data_frame$dailyCases, 
+                     start = 1, end=248, frequency = 1)
+  
+  return(dailyCases_ts)
+}
+
+# air_temp time series function
+AT_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+
+  air_temp_ts = ts(data_frame$air_temp, 
+                   start = 1, end=248, frequency = 1)
+  
+  return(air_temp_ts)
+}
+
+# RH time series function
+RH_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+  
+  RH_ts = ts(data_frame$RH, 
+             start = 1, end=248, frequency = 1)
+  
+  return(RH_ts)
+}
+
+# Rt time series function
+Rt_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+
+  Rt_ts = ts(data_frame$Rt, 
+             start = 1, end=248, frequency = 1)
+  
+  return(Rt_ts)
+}
+
+# apple_driving time series function
+AD_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+
+  apple_driving_ts = ts(data_frame$AppleDriving, 
+                        start = 1, end=248, frequency = 1)
+  
+  return(apple_driving_ts)
+}
+
+# Google_workplace time series function
+GW_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+  
+  Google_workplace_ts = ts(data_frame$GoogleWorkplace, 
+                           start = 1, end=248, frequency = 1)
+  
+  return(Google_workplace_ts)
+}
+
+# Google_residential time series function
+GR_timeSeries <- function(count) {
+  data_frame <- csv_data[[count]]
+  data_frame[is.na(data_frame)] = 0
+  
+  Google_residential_ts <- ts(data_frame$GoogleResidential, 
+                             start = 1, end=248, frequency = 1)
+  
+  return(Google_residential_ts)
+}
+
+################################################################################
+
+# Lag Selection Functions (using vars library)
+################################################################################
+
+# ORIGINAL CODE:
+# lagselect1 = VARselect(system1, lag.max = 7, type = "const")
+# lagselect1
+# 
+# K_val1 =strtoi(names(sort(summary(as.factor(lagselect1$selection)), decreasing=T)[1]))-1
+# K_val1
+# 
+# if (K_val3<2){
+#   K_val3=2
+# }
+# 
+# K_val3
+
+#####
+set_k_vals <- function(k_vals) {
+ 
+  kval_length = as.integer(length(k_vals))
+  
+  for (i in 1:kval_length) {
+    if (k_vals[i] < 2) {
+      k_vals[i] = 2
+    }
+  }
+  return(k_vals)
+}
+
+################################################################################
+```
+
+```{r}
+# Variables Used in FOR-Loop 
+################################################################################
+
+count <- 0
+csv_length <- as.integer(length(csv_data))
+
+skip_to_next <- FALSE
+
+# exported data frame
+exported_df <- data.frame(matrix(ncol = 8, nrow = 0))
+x <- c("Location", "Start Date", "End Date", "Test ID", "Test Type", "Test Statistic", "0.05 Critical Value", "P Value")
+colnames(exported_df) <- x
+#exported_df
+
+################################################################################
+
+# Cointegration Tests
+################################################################################
+
+johansen_error_handling_1 <- function(k_val){
+  tryCatch(
+    # This is what I want to do...
+    {
+      test1 = ca.jo(system1, type='trace', ecdet = 'const', K=k_vals[1])
+     # message("Everything went smoothly.")
+      return(test1)
+    },
+    # ... but if an error occurs, tell me what happened: 
+    error=function(error_message) {
+      #message("And below is the error message from R:")
+      #message(error_message, "\n")
+      exported_df[nrow(exported_df) + 1,] = list(title,"NA","NA","NA","NA","NA","NA","NA")
+      return(exported_df)
+      skip_to_next <<- TRUE
+    }
+  )
+}
+
+johansen_error_handling_2 <- function(k_val){
+  tryCatch(
+    # This is what I want to do...
+    {
+      test2 = ca.jo(system2, type='trace', ecdet = 'const', K=k_vals[2])
+      #message("Everything went smoothly.")
+      return(test2)
+    },
+    # ... but if an error occurs, tell me what happened: 
+    error=function(error_message) {
+      #message("And below is the error message from R:")
+      #message(error_message, "\n")
+      exported_df[nrow(exported_df) + 1,] = list(title,"NA","NA","NA","NA","NA","NA","NA")
+      return(exported_df)
+      skip_to_next <<- TRUE
+    }
+  )
+}
+johansen_error_handling_3 <- function(k_val){
+  tryCatch(
+    # This is what I want to do...
+    {
+      test3 = ca.jo(system3, type='trace', ecdet = 'const', K=k_vals[3])
+     # message("Everything went smoothly.")
+      return(test3)
+    },
+    # ... but if an error occurs, tell me what happened: 
+    error=function(error_message) {
+      #message("And below is the error message from R:")
+      #message(error_message, "\n")
+      exported_df[nrow(exported_df) + 1,] = list(title,"NA","NA","NA","NA","NA","NA","NA")
+      return(exported_df)
+      skip_to_next <<- TRUE
+    }
+  )
+}
+johansen_error_handling_4 <- function(k_val){
+  tryCatch(
+    # This is what I want to do...
+    {
+      test4 = ca.jo(system4, type='trace', ecdet = 'const', K=k_vals[4])
+      #message("Everything went smoothly.")
+      return(test4)
+    },
+    # ... but if an error occurs, tell me what happened: 
+    error=function(error_message) {
+      #message("And below is the error message from R:")
+      #message(error_message, "\n")
+      exported_df[nrow(exported_df) + 1,] = list(title,"NA","NA","NA","NA","NA","NA","NA")
+      return(exported_df)
+      skip_to_next <<- TRUE
+    }
+  )
+}
+
+johansen_error_handling_5 <- function(k_val){
+  tryCatch(
+    # This is what I want to do...
+    {
+      test5 = ca.jo(system5, type='trace', ecdet = 'const', K=k_vals[5])
+      #message("Everything went smoothly.")
+      return(test5)
+    },
+    # ... but if an error occurs, tell me what happened: 
+    error=function(error_message) {
+      #message("And below is the error message from R:")
+      #message(error_message, "\n")
+      exported_df[nrow(exported_df) + 1,] = list(title,"NA","NA","NA","NA","NA","NA","NA")
+      return(exported_df)
+      skip_to_next <<- TRUE
+    }
+  )
+}
+################################################################################
+
+# FOR-Loop
+################################################################################
+
+for (i in 3:5) {
+  count = i
+  skip_to_next <- FALSE
+ 
+  # TIME SERIES CREATION #
+  dailyCases        <- DC_timeSeries(count)
+  airTemp           <- AT_timeSeries(count)
+  RH                <- RH_timeSeries(count)
+  Rt                <- Rt_timeSeries(count)
+  appleDriving      <- AD_timeSeries(count)
+  GoogleWorkplace   <- GW_timeSeries(count)
+  GoogleResidential <- GR_timeSeries(count)
+  
+  # save county name as variable
+  title <- get_df_name(csv_data, count)
+
+  # plot time series for county
+  # plot(dailyCases, main = title)
+  # plot(airTemp, main = title)
+  # plot(RH, main = title)
+  # plot(Rt, main = title)
+  # plot(appleDriving, main = title)
+  # plot(GoogleWorkplace, main = title)
+  # plot(GoogleResidential, main = title)
+  # 
+  # SYSTEMS CREATION #
+  
+  # compare : 
+  # Rt_ts : Reproduction No
+  # air_temp_ts : air temperature 
+  
+  system1 = cbind(Rt, airTemp)
+  
+  # compare : 
+  # Rt_ts : Reproduction No
+  # RH_ts : Relative humidity 
+  
+  system2 = cbind(Rt, RH)
+  
+  # compare : 
+  # Rt_ts : Reproduction No
+  # apple_driving_ts : Apple Driving 
+  
+  system3 = cbind(Rt, appleDriving)
+  
+  # compare : 
+  # Rt_ts : Reproduction No
+  # Google_workplace_ts : Google Workplace
+  
+  system4 = cbind(Rt, GoogleWorkplace)
+  
+  # compare : 
+  # Rt_ts : Reproduction No
+  # Google_residential_ts : Google Residential
+  
+  system5 = cbind(Rt, GoogleResidential)
+
+  # LAG SELECTION #
+  lagselect1 = VARselect(system1, lag.max = 7, type = "const")
+  K_val1 = strtoi(names(sort(summary(as.factor(lagselect1$selection)), decreasing=T)[1]))-1
+  
+  # lag select 2
+  lagselect2 = VARselect(system2, lag.max = 7, type = "const")
+  K_val2 = strtoi(names(sort(summary(as.factor(lagselect2$selection)), decreasing=T)[1]))-1
+  
+  # lag select 3
+  lagselect3 = VARselect(system3, lag.max = 7, type = "const")
+  K_val3 = strtoi(names(sort(summary(as.factor(lagselect3$selection)), decreasing=T)[1]))-1
+  
+  # lag select 4
+  lagselect4 = VARselect(system4, lag.max = 7, type = "const")
+  K_val4 = strtoi(names(sort(summary(as.factor(lagselect4$selection)), decreasing=T)[1]))-1
+  
+  # lag select 5
+  lagselect5 = VARselect(system5, lag.max = 7, type = "const")
+  K_val5 = strtoi(names(sort(summary(as.factor(lagselect5$selection)), decreasing=T)[1]))-1
+  
+  # before lag selection function call
+  k_vals_vector <- c(K_val1, K_val2, K_val3, K_val4, K_val5)
+  
+  # after lag selection function call
+  k_vals <- set_k_vals(k_vals_vector)
+  
+  # JOHANSEN TESTS #
+  test1 <- johansen_error_handling_1(k_vals)
+  test2 <- johansen_error_handling_2(k_vals)
+  test3 <- johansen_error_handling_3(k_vals)
+  test4 <- johansen_error_handling_4(k_vals)
+  test5 <- johansen_error_handling_5(k_vals)
+  
+  if(skip_to_next) { 
+    #print("error:")
+    #print(title)
+    next 
+    } 
+  
+  # summary(test1)
+  # summary(test2)
+  # summary(test3)
+  # summary(test4)
+  # summary(test5)
+  
+  # set cointegration weight variables
+  test1_coint_eq_var1 <- abs(test1@V[2,1])
+  test1_coint_eq_var2 <- abs(test1@V[3,1])
+  
+  test2_coint_eq_var1 <- abs(test2@V[2,1])
+  test2_coint_eq_var2 <- abs(test2@V[3,1])
+  
+  test3_coint_eq_var1 <- abs(test3@V[2,1])
+  test3_coint_eq_var2 <- abs(test3@V[3,1])
+  
+  test4_coint_eq_var1 <- abs(test4@V[2,1])
+  test4_coint_eq_var2 <- abs(test4@V[3,1])
+  
+  test5_coint_eq_var1 <- abs(test5@V[2,1])
+  test5_coint_eq_var2 <- abs(test5@V[3,1])
+  
+  # declare cointegration weights
+  test1_w = Rt - test1_coint_eq_var1 * airTemp + test1_coint_eq_var2
+  test2_w = Rt - test2_coint_eq_var1 * RH + test2_coint_eq_var2
+  test3_w = Rt - test3_coint_eq_var1 * appleDriving + test3_coint_eq_var2
+  test4_w = Rt - test4_coint_eq_var1 * GoogleWorkplace + test4_coint_eq_var2
+  test5_w = Rt - test5_coint_eq_var1 * GoogleResidential + test5_coint_eq_var2
+  
+  # plot(test1_w, type="l", main = paste0(title," | Rt compared to airTemp"))
+  # plot(test2_w, type="l", main = paste0(title," | Rt compared to RH"))
+  # plot(test3_w, type="l", main = paste0(title," | Rt compared to appleDriving"))
+  # plot(test4_w, type="l", main = paste0(title," | Rt compared to GoogleWorkplace"))
+  # plot(test5_w, type="l", main = paste0(title," | Rt compared to GoogleResidential"))
+  
+  # AUGMENTED DICKEY FULLER
+  adf_t1 <- adf.test(test1_w)
+  adf_t2 <- adf.test(test2_w)
+  adf_t3 <- adf.test(test3_w)
+  adf_t4 <- adf.test(test4_w)
+  adf_t5 <- adf.test(test5_w)
+  
+  # JOHANSEN TEST (MaxEigen)
+  # print("------Eigen value testing----")
+  
+  test1ei = ca.jo(system1, type='eigen', ecdet = 'const', K=k_vals[1])
+  test2ei = ca.jo(system2, type='eigen', ecdet = 'const', K=k_vals[2])
+  test3ei = ca.jo(system3, type='eigen', ecdet = 'const', K=k_vals[3])
+  test4ei = ca.jo(system4, type='eigen', ecdet = 'const', K=k_vals[4])
+  test5ei = ca.jo(system5, type='eigen', ecdet = 'const', K=k_vals[5])
+  
+  # summary(test1ei)
+  # summary(test2ei)
+  # summary(test3ei)
+  # summary(test4ei)
+  # summary(test5ei)
+  
+  
+  # function to send each iteration's results to a csv;
+    # save each iteration as a pdf
+  dates_csv = get(title,csv_data)
+  na.omit(dates_csv$date)
+  start = dates_csv$date[1]
+  end = dates_csv$date[[length(dates_csv$date)]]
+  test_ID = c("Air Temperature", "RH", "Apple Driving", "Google Workplace", "Google Residential","Air Temperature", "RH", "Apple Driving", "Google Workplace", "Google Residential")
+  test_type = c(test1@type, test2@type, test3@type, test4@type, test5@type, test1ei@type, test2ei@type, test3ei@type, test4ei@type, test5ei@type)
+  test_stat = c(test1@teststat[2], test2@teststat[2], test3@teststat[2], test4@teststat[2], test5@teststat[2], test1ei@teststat[2], test2ei@teststat[2], test3ei@teststat[2], test4ei@teststat[2], test5ei@teststat[2])
+  crit_value = c(test1@cval[2,2], test2@cval[2,2], test3@cval[2,2], test4@cval[2,2], test5@cval[2,2], test1ei@cval[2,2], test2ei@cval[2,2], test3ei@cval[2,2], test4ei@cval[2,2], test5ei@cval[2,2])
+  p_val = c(adf_t1$p.value, adf_t2$p.value, adf_t3$p.value, adf_t4$p.value, adf_t5$p.value,adf_t1$p.value, adf_t2$p.value, adf_t3$p.value, adf_t4$p.value, adf_t5$p.value)
+
+  # NOTE: make a trycatch for each variable to catch if a test is a ca.jo or a data.frame
+  # if it is a data.frame, it holds all the data for some reason.
+  # I don't know why, specifically test2, turns into a data.frame at the end; it looks to be the size of exported_df
+  
+  for (i in 1:10) {exported_df[nrow(exported_df) + 1,] = list(title, start, end, test_ID[i], test_type[i], test_stat[i], crit_value[i], p_val[i])}
+  # break
+  #print(title)
+} # for-loop end
+
+#exported_df
+
+# install.packages("openxlsx")
+# install.packages('Rcpp')
+library("openxlsx")
+
+## Create a new workbook and add a worksheet
+wb <- createWorkbook("test_export")
+addWorksheet(wb, sheetName = "test_export")
+
+## Save workbook to working directory
+## Not run: 
+saveWorkbook(wb, file = "sExample.xlsx", overwrite = TRUE)
+
+## End(Not run)
+
+write.xlsx(exported_df, 'C:/Users/torrw/Desktop/iCompBio/covid-cointegration-summer2021/will/test_export.xlsx', overwrite = TRUE)
+
+
+# plots.dir.path <- list.files(tempdir(), pattern="rs-graphics", full.names = TRUE); 
+# plots.png.paths <- list.files(plots.dir.path, pattern=".png", full.names = TRUE)
+# 
+# file.copy(from=plots.png.paths, to="C:/Users/torrw/Desktop/iCompBio/covid-cointegration-summer2021/will/plots")
+################################################################################
+```
