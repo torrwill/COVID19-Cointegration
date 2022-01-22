@@ -1,6 +1,4 @@
 # COVID19-Cointegration
- Cointegration Analysis of COVID-19 Transmission at State and County Levels in the US.
-
 ## Project Description
 
 Co-integration analysis is a method for time series analysis that can identify associations among non-stationary variables.  Here, we applied co-integration on the COVID19 transmission and deaths at county levels in the USA, mobility estimations, weather conditions, and social sentiments. Future work will be to identify counties with holiday peaks versus those without detectable holiday peaks and identify potential contributing factors via Twitter Sentiment Data. 
